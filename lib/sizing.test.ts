@@ -52,3 +52,40 @@ describe("calculateSizing — single AC", () => {
     expect(r.tooLarge).toBe(false);
   });
 });
+
+describe("calculateSizing — combined household", () => {
+  it("AC 1.5HP + fridge + 5 LED bulbs, 4h → 5kW + 1× 200Ah", () => {
+    const r = calculateSizing(
+      {
+        picks: [
+          { applianceId: "ac",     variantId: "ac-1.5",   count: 1 },
+          { applianceId: "fridge", variantId: "fridge-m", count: 1 },
+          { applianceId: "led",    variantId: "led-9",    count: 5 },
+        ],
+        backupHours: 4,
+      },
+      catalog,
+    );
+    // running: 1100 + 150 + 45 = 1295W
+    // max surge_extra: AC = 2200 (highest among inductive)
+    // required: (1295 + 2200) × 1.20 = 4194W → 5kW, 48V
+    // energy: 1295 × 4 = 5180Wh / (0.85 × 0.80) = 7617.6Wh
+    // required Ah at 48V = 158.7 → pick 200Ah × 1
+    expect(r.inverterKw).toBe(5);
+    expect(r.systemVoltage).toBe(48);
+    expect(r.battery).toEqual({ qty: 1, ahEach: 200 });
+    expect(r.totalRunningWatts).toBe(1295);
+  });
+
+  it("only 5 LED 9W bulbs, 6h → 1kW + 1× 100Ah, 12V", () => {
+    const r = calculateSizing(
+      { picks: [{ applianceId: "led", variantId: "led-9", count: 5 }], backupHours: 6 },
+      catalog,
+    );
+    // 45W × 1.20 = 54W → 1kW. 12V.
+    // 45 × 6 / (0.85 × 0.80) = 397.0Wh / 12V = 33Ah → 100Ah × 1
+    expect(r.inverterKw).toBe(1);
+    expect(r.systemVoltage).toBe(12);
+    expect(r.battery).toEqual({ qty: 1, ahEach: 100 });
+  });
+});
