@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { calculateSizing } from "./sizing";
+import { estimatePriceEgp } from "./price-estimate";
 import type { SizingInput, Appliance } from "./types";
 
 const empty: SizingInput = { picks: [], backupHours: 4 };
@@ -100,5 +101,21 @@ describe("calculateSizing — too large", () => {
     // total (8800 + 17600) × 1.20 = 31680W → no standard fits (>10kW)
     expect(r.tooLarge).toBe(true);
     expect(r.warnings).toContain("TOO_LARGE");
+  });
+});
+
+describe("estimatePriceEgp", () => {
+  it("3kW inverter + 1× 200Ah at 24V, mid-tier pricing", () => {
+    const r = estimatePriceEgp(3, 1, 200, 24, {
+      inverter_egp_per_kw_min: 4500,
+      inverter_egp_per_kw_max: 7500,
+      battery_egp_per_wh_min: 12,
+      battery_egp_per_wh_max: 18,
+    });
+    // inverter: 3 × 4500..7500 = 13500..22500
+    // battery: 200×24 = 4800Wh × 12..18 = 57600..86400
+    // total: 71100..108900 → rounded to nearest 1000
+    expect(r.min).toBe(71000);
+    expect(r.max).toBe(109000);
   });
 });
