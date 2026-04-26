@@ -1,0 +1,56 @@
+export type Governorate = "Cairo" | "Giza" | "Alexandria" | "Other";
+export type ApplianceCategory = "cooling" | "lighting" | "kitchen" | "media" | "laundry" | "other";
+
+export interface ApplianceVariant {
+  id: string;
+  variant_label_ar: string;
+  variant_label_en: string;
+  running_watts: number;
+  surge_watts: number;
+}
+
+export interface Appliance {
+  id: string;
+  slug: string;
+  name_ar: string;
+  name_en: string;
+  category: ApplianceCategory;
+  inductive: boolean;
+  icon: string;
+  notes_ar?: string;
+  notes_en?: string;
+  variants: ApplianceVariant[];
+}
+
+export interface AppliancePick {
+  applianceId: string;
+  variantId: string;
+  count: number;
+}
+
+export interface SizingInput {
+  picks: AppliancePick[];
+  backupHours: number;
+}
+
+export interface SizingResult {
+  inverterKw: number;
+  systemVoltage: 12 | 24 | 48;
+  battery: { qty: number; ahEach: number };
+  totalRunningWatts: number;
+  estimatedPriceEgp: { min: number; max: number };
+  warnings: string[];
+  tooLarge: boolean;
+}
+
+export interface Shop {
+  id: string;
+  name: string;
+  governorate: Governorate;
+  area: string;
+  whatsapp_number: string;
+  maps_url: string;
+  facebook_url?: string;
+  specialty_tags: string[];
+  is_active: boolean;
+}
