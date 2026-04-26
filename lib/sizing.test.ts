@@ -89,3 +89,16 @@ describe("calculateSizing — combined household", () => {
     expect(r.battery).toEqual({ qty: 1, ahEach: 100 });
   });
 });
+
+describe("calculateSizing — too large", () => {
+  it("8× 1.5HP AC → tooLarge", () => {
+    const r = calculateSizing(
+      { picks: [{ applianceId: "ac", variantId: "ac-1.5", count: 8 }], backupHours: 4 },
+      catalog,
+    );
+    // running 8800, surge_extra (8 ACs all inductive) = (3300-1100)×8 = 17600
+    // total (8800 + 17600) × 1.20 = 31680W → no standard fits (>10kW)
+    expect(r.tooLarge).toBe(true);
+    expect(r.warnings).toContain("TOO_LARGE");
+  });
+});
