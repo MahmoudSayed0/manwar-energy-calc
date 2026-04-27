@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractWatts, findClosestVariant } from "./match-variant";
+import { extractWatts, extractOrCalculateWatts, findClosestVariant } from "./match-variant";
 import type { Appliance } from "./types";
 
 describe("extractWatts", () => {
@@ -59,6 +59,28 @@ const catalog: Appliance[] = [
     ],
   },
 ];
+
+describe("extractOrCalculateWatts", () => {
+  it("prefers a direct watt reading", () => {
+    expect(extractOrCalculateWatts("220V 50Hz 150W 0.7A")).toEqual({ watts: 150, method: "direct" });
+  });
+
+  it("computes from V x A when watts are missing", () => {
+    expect(extractOrCalculateWatts("220V 0.7A")).toEqual({ watts: 154, method: "computed" });
+    expect(extractOrCalculateWatts("INPUT 230V  1.5A 50Hz")).toEqual({ watts: 345, method: "computed" });
+  });
+
+  it("rejects unreasonable computed values", () => {
+    expect(extractOrCalculateWatts("12V 0.1A")).toBe(null);          // 1.2W too small
+    expect(extractOrCalculateWatts("50V 200A")).toBe(null);          // out of mains range (50V)
+    expect(extractOrCalculateWatts("220V 0.001A")).toBe(null);       // 0.22W too small
+  });
+
+  it("returns null when no useful values are present", () => {
+    expect(extractOrCalculateWatts("Model XYZ Made in China")).toBe(null);
+    expect(extractOrCalculateWatts("")).toBe(null);
+  });
+});
 
 describe("findClosestVariant", () => {
   it("finds an exact match", () => {

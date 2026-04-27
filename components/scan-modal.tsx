@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Camera, X, RotateCcw, Check, AlertCircle, Loader2 } from "lucide-react";
+import { Camera, X, RotateCcw, Check, AlertCircle, Loader2, Upload, Keyboard } from "lucide-react";
 import * as Icons from "lucide-react";
 import { cn } from "@/lib/utils";
-import { extractWatts, findClosestVariant } from "@/lib/match-variant";
+import { extractOrCalculateWatts, findClosestVariant } from "@/lib/match-variant";
 import type { Appliance, AppliancePick } from "@/lib/types";
 
 interface Props {
@@ -17,7 +17,8 @@ interface Props {
 type Status =
   | { kind: "init" }
   | { kind: "scanning"; attempts: number; lastSeen?: string }
-  | { kind: "result"; watts: number | null; match: ReturnType<typeof findClosestVariant> }
+  | { kind: "processing-upload" }
+  | { kind: "result"; watts: number | null; match: ReturnType<typeof findClosestVariant>; method?: "direct" | "computed" | "manual" }
   | { kind: "camera-error"; message: string }
   | { kind: "ocr-error"; message: string };
 
@@ -34,10 +35,12 @@ type TesseractWorker = {
 
 export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const workerRef = useRef<TesseractWorker | null>(null);
   const cancelledRef = useRef(false);
   const [status, setStatus] = useState<Status>({ kind: "init" });
+  const [manualWattsInput, setManualWattsInput] = useState("");
 
   const t = locale === "ar"
     ? {
@@ -45,20 +48,26 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
         hint_idle: "وجّه الكاميرا على لوحة المواصفات (اللي مكتوب فيها مثلًا 220V 150W)",
         hint_scanning: "ثبّت الكاميرا على لوحة المواصفات...",
         hint_keep_trying: "قرّب الكاميرا أكتر للوحة المواصفات.",
-        capture_manual: "التقط دلوقتي",
+        capture_manual: "التقط",
+        upload: "رفع صورة",
+        processing: "جاري قراءة الصورة...",
         retry: "حاول تاني",
         cancel: "إلغاء",
         detected: "وجدنا",
+        computed: "(محسوب من V × A)",
         watts_unit: "وات",
         no_watts: "ما قدرناش نقرأ القدرة",
-        no_watts_hint: "وجّه الكاميرا أقرب للوحة المواصفات وحاول مرة تانية.",
+        no_watts_hint: "ممكن تكتبها يدوي من اللوحة، أو حاول تاني.",
+        manual_label: "اكتب القدرة بنفسك",
+        manual_placeholder: "مثلًا 150",
+        manual_use: "استخدم",
         no_match: "ما لقيناش جهاز قريب في القائمة",
         no_match_hint: "ممكن جهازك مش في كتالوجنا. ضيفه يدوي من الخطوة.",
         match_label: "الجهاز الأقرب",
         confirm: "أضف",
         close: "إغلاق",
         camera_error: "ما قدرناش نفتح الكاميرا",
-        camera_error_hint: "تأكد إنك سمحت بالكاميرا في إعدادات المتصفح.",
+        camera_error_hint: "تأكد إنك سمحت بالكاميرا في إعدادات المتصفح، أو ارفع صورة من جهازك.",
         ocr_error: "حصلت مشكلة في القراءة",
         ocr_error_hint: "حاول تاني أو ضيف الجهاز يدوي.",
         opening: "بنفتح الكاميرا...",
@@ -68,20 +77,26 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
         hint_idle: "Point your camera at the spec plate (the one with values like 220V 150W).",
         hint_scanning: "Hold steady on the spec plate...",
         hint_keep_trying: "Move the camera closer to the spec plate.",
-        capture_manual: "Capture now",
+        capture_manual: "Capture",
+        upload: "Upload image",
+        processing: "Reading image...",
         retry: "Try again",
         cancel: "Cancel",
         detected: "Detected",
+        computed: "(computed from V × A)",
         watts_unit: "W",
         no_watts: "Couldn't read the wattage",
-        no_watts_hint: "Hold the camera closer to the spec plate and try again.",
+        no_watts_hint: "Type it manually from the plate, or try the camera again.",
+        manual_label: "Or type the wattage yourself",
+        manual_placeholder: "e.g. 150",
+        manual_use: "Use",
         no_match: "No close match in our catalog",
         no_match_hint: "Your appliance might not be in our list — go back and add it manually from the step.",
         match_label: "Closest match",
         confirm: "Add",
         close: "Close",
         camera_error: "Couldn't access the camera",
-        camera_error_hint: "Make sure you allowed camera access in your browser.",
+        camera_error_hint: "Make sure you allowed camera access — or upload an image from your device instead.",
         ocr_error: "Something went wrong while reading",
         ocr_error_hint: "Try again or add the appliance manually.",
         opening: "Opening the camera...",
@@ -181,12 +196,10 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
         const snippet = data.text.replace(/\s+/g, " ").trim().slice(0, 60);
         if (snippet) lastSeen = snippet;
 
-        const watts = extractWatts(data.text);
-        if (watts != null) {
-          // Stop on the first wattage we find — regardless of whether the catalog has a match.
-          // The user sees the reading either way, with the closest variant if one exists.
-          const match = findClosestVariant(watts, catalog);
-          setStatus({ kind: "result", watts, match });
+        const r = extractOrCalculateWatts(data.text);
+        if (r != null) {
+          const match = findClosestVariant(r.watts, catalog);
+          setStatus({ kind: "result", watts: r.watts, match, method: r.method });
           return;
         }
       } catch {
@@ -209,15 +222,74 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
     setStatus({ kind: "scanning", attempts: 0 });
     try {
       const { data } = await workerRef.current.recognize(canvas);
-      const watts = extractWatts(data.text);
+      const r = extractOrCalculateWatts(data.text);
+      const watts = r?.watts ?? null;
       const match = watts != null ? findClosestVariant(watts, catalog) : null;
-      setStatus({ kind: "result", watts, match });
+      setStatus({ kind: "result", watts, match, method: r?.method });
     } catch (err) {
       setStatus({
         kind: "ocr-error",
         message: err instanceof Error ? err.message : "OCR failed",
       });
     }
+  }
+
+  // Upload an image from the user's device (gallery, files, screenshots).
+  async function uploadImage(file: File) {
+    if (!workerRef.current) {
+      // If the camera failed and we never got a worker, lazy-create one now.
+      try {
+        const Tesseract = (await import("tesseract.js")).default;
+        const worker = await Tesseract.createWorker("eng");
+        workerRef.current = worker as unknown as TesseractWorker;
+      } catch {
+        setStatus({ kind: "ocr-error", message: "OCR engine unavailable" });
+        return;
+      }
+    }
+    cancelledRef.current = true;
+    setStatus({ kind: "processing-upload" });
+
+    let objectUrl: string | null = null;
+    try {
+      objectUrl = URL.createObjectURL(file);
+      const img = new Image();
+      img.src = objectUrl;
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error("Couldn't load image"));
+      });
+
+      // Don't crop uploaded images — the user already framed it.
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Canvas not available");
+      ctx.drawImage(img, 0, 0);
+
+      const { data } = await workerRef.current!.recognize(canvas);
+      const r = extractOrCalculateWatts(data.text);
+      const watts = r?.watts ?? null;
+      const match = watts != null ? findClosestVariant(watts, catalog) : null;
+      setStatus({ kind: "result", watts, match, method: r?.method });
+    } catch (err) {
+      setStatus({
+        kind: "ocr-error",
+        message: err instanceof Error ? err.message : "Image processing failed",
+      });
+    } finally {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    }
+  }
+
+  // Manual wattage entry: skip OCR entirely.
+  function submitManualWatts() {
+    const n = parseInt(manualWattsInput, 10);
+    if (!Number.isFinite(n) || n < 5 || n > 15000) return;
+    const match = findClosestVariant(n, catalog);
+    setStatus({ kind: "result", watts: n, match, method: "manual" });
+    setManualWattsInput("");
   }
 
   function captureCroppedFrame(): HTMLCanvasElement | null {
@@ -264,6 +336,7 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
 
   const showLiveCamera = status.kind === "init" || status.kind === "scanning";
   const isResultMode = status.kind === "result" || status.kind === "ocr-error" || status.kind === "camera-error";
+  const showUploadFallback = status.kind === "scanning" || status.kind === "camera-error";
 
   return (
     <div
@@ -336,13 +409,29 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
             </div>
           )}
 
+          {status.kind === "processing-upload" && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center bg-card text-foreground">
+              <Loader2 className="h-9 w-9 text-primary animate-spin" />
+              <p className="font-medium text-sm">{t.processing}</p>
+            </div>
+          )}
+
           {status.kind === "result" && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center bg-card text-foreground">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-5 text-center bg-card text-foreground overflow-y-auto">
               {status.watts == null ? (
                 <>
-                  <AlertCircle className="h-10 w-10 text-warning" />
-                  <p className="font-bold text-base">{t.no_watts}</p>
+                  <AlertCircle className="h-9 w-9 text-warning" />
+                  <p className="font-bold text-sm">{t.no_watts}</p>
                   <p className="text-xs text-muted-foreground leading-relaxed max-w-xs">{t.no_watts_hint}</p>
+                  <ManualWattsInput
+                    value={manualWattsInput}
+                    onChange={setManualWattsInput}
+                    onSubmit={submitManualWatts}
+                    label={t.manual_label}
+                    placeholder={t.manual_placeholder}
+                    useLabel={t.manual_use}
+                    wattsUnit={t.watts_unit}
+                  />
                 </>
               ) : (
                 <>
@@ -351,6 +440,9 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
                     {status.watts}
                     <span className="text-2xl font-semibold opacity-70 ms-2">{t.watts_unit}</span>
                   </p>
+                  {status.method === "computed" && (
+                    <p className="text-[10px] text-muted-foreground -mt-1">{t.computed}</p>
+                  )}
                   {status.match ? (
                     <MatchPreview match={status.match} locale={locale} matchLabel={t.match_label} />
                   ) : (
@@ -370,7 +462,7 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
           )}
         </div>
 
-        <div className="p-4 flex items-center justify-center gap-3">
+        <div className="p-4 flex items-center justify-center gap-2 flex-wrap">
           {status.kind === "scanning" && (
             <button
               type="button"
@@ -380,6 +472,30 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
               <Camera className="h-4 w-4" />
               {t.capture_manual}
             </button>
+          )}
+
+          {showUploadFallback && (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) uploadImage(file);
+                  e.target.value = "";
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="inline-flex items-center justify-center gap-2 h-11 px-5 rounded-full border border-border font-medium hover:bg-muted transition-colors text-sm"
+              >
+                <Upload className="h-4 w-4" />
+                {t.upload}
+              </button>
+            </>
           )}
 
           {isResultMode && (
@@ -406,6 +522,62 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function ManualWattsInput({
+  value,
+  onChange,
+  onSubmit,
+  label,
+  placeholder,
+  useLabel,
+  wattsUnit,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onSubmit: () => void;
+  label: string;
+  placeholder: string;
+  useLabel: string;
+  wattsUnit: string;
+}) {
+  const n = parseInt(value, 10);
+  const valid = Number.isFinite(n) && n >= 5 && n <= 15000;
+  return (
+    <div className="w-full max-w-xs mt-1 space-y-2">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground flex items-center gap-1.5 justify-center">
+        <Keyboard className="h-3 w-3" />
+        {label}
+      </p>
+      <form
+        onSubmit={(e) => { e.preventDefault(); if (valid) onSubmit(); }}
+        className="flex items-center gap-2"
+      >
+        <div className="relative flex-1">
+          <input
+            type="number"
+            inputMode="numeric"
+            min={5}
+            max={15000}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder}
+            className="w-full h-10 ps-3 pe-9 rounded-full border border-border bg-input-background text-foreground text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+          <span className="absolute end-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium pointer-events-none">
+            {wattsUnit}
+          </span>
+        </div>
+        <button
+          type="submit"
+          disabled={!valid}
+          className="h-10 px-4 rounded-full bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40 hover:bg-[hsl(var(--primary-dark))] transition-colors"
+        >
+          {useLabel}
+        </button>
+      </form>
     </div>
   );
 }
