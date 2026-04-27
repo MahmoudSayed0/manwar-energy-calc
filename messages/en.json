@@ -1,0 +1,29 @@
+{
+  "site": {
+    "title": "Manwar — Keep your home lit, even when the grid isn't.",
+    "description": "Free Egyptian battery and inverter sizing calculator. Tell us your appliances; we tell you what to buy."
+  },
+  "landing": {
+    "hero_kicker": "When the power goes out, life shouldn't.",
+    "hero_title": "What inverter and batteries do you really need?",
+    "hero_subtitle": "Free, in Arabic, sized for your home in 90 seconds.",
+    "cta_calculate": "Calculate now"
+  },
+  "calculator": {
+    "step1_title": "What appliances do you have?",
+    "step1_hint": "Tap to add. Tap + or − to set how many.",
+    "submit": "Calculate"
+  },
+  "result": {
+    "title": "Your recommendation",
+    "share": "Share on WhatsApp",
+    "shops_title": "Where to buy",
+    "disclaimer": "This is an estimate. Confirm with a licensed installer before purchase.",
+    "too_large_title": "Your load is unusually large",
+    "too_large_body": "Talk to a licensed engineer for proper sizing."
+  },
+  "common": {
+    "ar": "العربية",
+    "en": "English"
+  }
+}

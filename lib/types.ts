@@ -26,6 +26,7 @@ export interface AppliancePick {
   applianceId: string;
   variantId: string;
   count: number;
+  isInverter?: boolean;
 }
 
 export interface SizingInput {
@@ -43,6 +44,8 @@ export interface SizingResult {
   tooLarge: boolean;
 }
 
+export type ShopTier = "local" | "premium" | "digital";
+
 export interface Shop {
   id: string;
   name: string;
@@ -50,7 +53,13 @@ export interface Shop {
   area: string;
   whatsapp_number: string;
   maps_url: string;
-  facebook_url?: string;
+  facebook_url?: string | null;
+  website_url?: string | null;
+  phone_number?: string | null;
+  logo_url?: string | null;
+  description_ar?: string | null;
+  description_en?: string | null;
+  tier?: ShopTier | null;
   specialty_tags: string[];
   is_active: boolean;
 }

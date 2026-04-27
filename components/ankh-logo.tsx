@@ -3,26 +3,24 @@ import { cn } from "@/lib/utils";
 interface AnkhLogoProps {
   className?: string;
   size?: number;
+  variant?: "default" | "white" | "black";
 }
 
-export function AnkhLogo({ className, size = 32 }: AnkhLogoProps) {
+const SOURCES: Record<NonNullable<AnkhLogoProps["variant"]>, string> = {
+  default: "/MANWAR-logo.svg",
+  white:   "/MANWAR-logo-white.svg",
+  black:   "/MANWAR-logo-black.svg",
+};
+
+export function AnkhLogo({ className, size = 40, variant = "default" }: AnkhLogoProps) {
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 64 96"
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={SOURCES[variant]}
+      alt="Manwar"
       width={size}
-      height={size * 1.5}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="4"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+      height={Math.round(size * (171 / 251))}
       className={cn("inline-block", className)}
-      aria-label="Ankh"
-    >
-      <ellipse cx="32" cy="22" rx="14" ry="18" />
-      <line x1="32" y1="40" x2="32" y2="92" />
-      <line x1="14" y1="52" x2="50" y2="52" />
-    </svg>
+    />
   );
 }

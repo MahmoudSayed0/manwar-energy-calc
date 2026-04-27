@@ -39,7 +39,7 @@ export function calculateSizing(input: SizingInput, catalog: Appliance[]): Sizin
 
     sumRunningW += variant.running_watts * pick.count;
 
-    if (appl.inductive) {
+    if (appl.inductive && !pick.isInverter) {
       const extra = (variant.surge_watts - variant.running_watts) * pick.count;
       if (extra > maxSurgeExtra) maxSurgeExtra = extra;
     }

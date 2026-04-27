@@ -1,0 +1,38 @@
+<svg viewBox="115 -3 65 55" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <g filter="url(#sun_blur)">
+    <path d="M151.965 31.5C150.514 30.3053 148.893 29.708 147.101 29.708C145.224 29.708 143.602 30.3053 142.237 31.5C140.872 32.78 140.189 34.3587 140.189 36.236C140.189 38.028 140.872 39.564 142.237 40.844C143.517 42.2093 145.138 42.892 147.101 42.892C148.978 42.892 150.6 42.2093 151.965 40.844C153.33 39.564 154.013 38.028 154.013 36.236C154.013 34.3587 153.33 32.78 151.965 31.5Z" fill="#FFBB00"/>
+  </g>
+  <path d="M151.965 31.5C150.514 30.3053 148.893 29.708 147.101 29.708C145.224 29.708 143.602 30.3053 142.237 31.5C140.872 32.78 140.189 34.3587 140.189 36.236C140.189 38.028 140.872 39.564 142.237 40.844C143.517 42.2093 145.138 42.892 147.101 42.892C148.978 42.892 150.6 42.2093 151.965 40.844C153.33 39.564 154.013 38.028 154.013 36.236C154.013 34.3587 153.33 32.78 151.965 31.5Z" fill="white"/>
+  <line x1="119" y1="36" x2="130" y2="36" stroke="url(#sun_g0)" stroke-width="4" stroke-linecap="round"/>
+  <line x1="147" y1="2"  x2="147" y2="17" stroke="url(#sun_g1)" stroke-width="4" stroke-linecap="round"/>
+  <line x1="125.828" y1="15" x2="134" y2="23.1716" stroke="url(#sun_g2)" stroke-width="4" stroke-linecap="round"/>
+  <line x1="166.606" y1="14.8284" x2="158.828" y2="22.6066" stroke="url(#sun_g3)" stroke-width="4" stroke-linecap="round"/>
+  <line x1="175" y1="36" x2="164" y2="36" stroke="url(#sun_g4)" stroke-width="4" stroke-linecap="round"/>
+  <defs>
+    <filter id="sun_blur" x="132.889" y="22.408" width="28.4242" height="27.7841" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+      <feGaussianBlur stdDeviation="3.65" result="effect1_foregroundBlur"/>
+    </filter>
+    <linearGradient id="sun_g0" x1="117" y1="38.5" x2="132" y2="38.5" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFCC4B"/>
+      <stop offset="1" stop-color="white"/>
+    </linearGradient>
+    <linearGradient id="sun_g1" x1="144.5" y1="0" x2="144.5" y2="19" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFCC4B"/>
+      <stop offset="1" stop-color="white"/>
+    </linearGradient>
+    <linearGradient id="sun_g2" x1="122.646" y1="15.3536" x2="133.646" y2="26.3536" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFCC4B"/>
+      <stop offset="1" stop-color="white"/>
+    </linearGradient>
+    <linearGradient id="sun_g3" x1="166.253" y1="11.6464" x2="155.646" y2="22.253" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFCC4B"/>
+      <stop offset="1" stop-color="white"/>
+    </linearGradient>
+    <linearGradient id="sun_g4" x1="177" y1="33.5" x2="162" y2="33.5" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFCC4B"/>
+      <stop offset="1" stop-color="white"/>
+    </linearGradient>
+  </defs>
+</svg>

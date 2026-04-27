@@ -104,6 +104,40 @@ describe("calculateSizing — too large", () => {
   });
 });
 
+describe("calculateSizing — inverter AC (soft-start, no surge)", () => {
+  it("solo inverter AC 1.5HP → 1.5kW (was 5kW without inverter tag)", () => {
+    const r = calculateSizing(
+      { picks: [{ applianceId: "ac", variantId: "ac-1.5", count: 1, isInverter: true }], backupHours: 4 },
+      catalog,
+    );
+    // running 1100, surge skipped for inverter-tagged AC: (1100 + 0) × 1.20 = 1320W → 1.5kW @ 12V.
+    expect(r.inverterKw).toBe(1.5);
+    expect(r.systemVoltage).toBe(12);
+    expect(r.tooLarge).toBe(false);
+  });
+
+  it("inverter AC + fridge + 5 LEDs, 4h → 3kW (was 5kW)", () => {
+    const r = calculateSizing(
+      {
+        picks: [
+          { applianceId: "ac",     variantId: "ac-1.5",   count: 1, isInverter: true },
+          { applianceId: "fridge", variantId: "fridge-m", count: 1 },
+          { applianceId: "led",    variantId: "led-9",    count: 5 },
+        ],
+        backupHours: 4,
+      },
+      catalog,
+    );
+    // running: 1295W (unchanged)
+    // surge_extra: AC skipped (inverter), fridge = 750W (highest remaining inductive)
+    // required: (1295 + 750) × 1.20 = 2454W → 3kW @ 24V.
+    expect(r.inverterKw).toBe(3);
+    expect(r.systemVoltage).toBe(24);
+    expect(r.totalRunningWatts).toBe(1295);
+    expect(r.tooLarge).toBe(false);
+  });
+});
+
 describe("estimatePriceEgp", () => {
   it("3kW inverter + 1× 200Ah at 24V, mid-tier pricing", () => {
     const r = estimatePriceEgp(3, 1, 200, 24, {
