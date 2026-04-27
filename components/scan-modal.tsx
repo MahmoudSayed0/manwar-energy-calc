@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Camera, X, RotateCcw, Check, AlertCircle, Loader2, Upload, Keyboard } from "lucide-react";
+import { Camera, X, RotateCcw, Check, AlertCircle, Loader2, Upload, Keyboard, ScanLine } from "lucide-react";
 import * as Icons from "lucide-react";
 import { cn } from "@/lib/utils";
 import { extractOrCalculateWatts, findClosestVariant } from "@/lib/match-variant";
@@ -19,8 +19,26 @@ type Status =
   | { kind: "scanning"; attempts: number; lastSeen?: string }
   | { kind: "processing-upload" }
   | { kind: "result"; watts: number | null; match: ReturnType<typeof findClosestVariant>; method?: "direct" | "computed" | "manual" }
+  | { kind: "barcode-found"; code: string }
   | { kind: "camera-error"; message: string }
   | { kind: "ocr-error"; message: string };
+
+// Try the browser's native BarcodeDetector. Returns the first decoded value, or null
+// if not detected (or the API isn't supported, e.g. Firefox).
+async function tryDetectBarcode(source: HTMLCanvasElement | HTMLImageElement): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+  const Ctor = (window as unknown as { BarcodeDetector?: new (opts?: object) => { detect: (img: CanvasImageSource) => Promise<Array<{ rawValue: string }>> } }).BarcodeDetector;
+  if (!Ctor) return null;
+  try {
+    const detector = new Ctor({
+      formats: ["code_128", "code_39", "ean_8", "ean_13", "upc_a", "upc_e", "qr_code", "data_matrix"],
+    });
+    const codes = await detector.detect(source);
+    return codes[0]?.rawValue ?? null;
+  } catch {
+    return null;
+  }
+}
 
 // Cooldown between auto-scan attempts (lets the camera refocus and saves battery).
 const SCAN_COOLDOWN_MS = 500;
@@ -66,6 +84,8 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
         match_label: "الجهاز الأقرب",
         confirm: "أضف",
         close: "إغلاق",
+        barcode_title: "اتقرى الباركود",
+        barcode_body: "قرينا الكود من الباكدج، بس لسة معندناش قاعدة بيانات تربط الباركود بالجهاز. وجّه الكاميرا على لوحة المواصفات (اللي مكتوب فيها 220V 150W) عشان نعرف القدرة.",
         camera_error: "ما قدرناش نفتح الكاميرا",
         camera_error_hint: "تأكد إنك سمحت بالكاميرا في إعدادات المتصفح، أو ارفع صورة من جهازك.",
         ocr_error: "حصلت مشكلة في القراءة",
@@ -95,6 +115,8 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
         match_label: "Closest match",
         confirm: "Add",
         close: "Close",
+        barcode_title: "Barcode detected",
+        barcode_body: "We read the barcode from the packaging, but we don't have a barcode-to-appliance lookup yet. Point the camera at the spec plate instead (the one with 220V 150W) so we can read the wattage.",
         camera_error: "Couldn't access the camera",
         camera_error_hint: "Make sure you allowed camera access — or upload an image from your device instead.",
         ocr_error: "Something went wrong while reading",
@@ -189,6 +211,14 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
       }
 
       try {
+        // Try barcode first (fast, ~50ms when present, instant when absent)
+        const code = await tryDetectBarcode(canvas);
+        if (cancelledRef.current) return;
+        if (code) {
+          setStatus({ kind: "barcode-found", code });
+          return;
+        }
+
         const { data } = await workerRef.current!.recognize(canvas);
         if (cancelledRef.current) return;
 
@@ -221,6 +251,11 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
     }
     setStatus({ kind: "scanning", attempts: 0 });
     try {
+      const code = await tryDetectBarcode(canvas);
+      if (code) {
+        setStatus({ kind: "barcode-found", code });
+        return;
+      }
       const { data } = await workerRef.current.recognize(canvas);
       const r = extractOrCalculateWatts(data.text);
       const watts = r?.watts ?? null;
@@ -267,6 +302,13 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("Canvas not available");
       ctx.drawImage(img, 0, 0);
+
+      // Try barcode first — uploaded images are often packaging photos.
+      const code = await tryDetectBarcode(img);
+      if (code) {
+        setStatus({ kind: "barcode-found", code });
+        return;
+      }
 
       const { data } = await workerRef.current!.recognize(canvas);
       const r = extractOrCalculateWatts(data.text);
@@ -335,7 +377,7 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
   }
 
   const showLiveCamera = status.kind === "init" || status.kind === "scanning";
-  const isResultMode = status.kind === "result" || status.kind === "ocr-error" || status.kind === "camera-error";
+  const isResultMode = status.kind === "result" || status.kind === "ocr-error" || status.kind === "camera-error" || status.kind === "barcode-found";
   const showUploadFallback = status.kind === "scanning" || status.kind === "camera-error";
 
   return (
@@ -450,6 +492,17 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
                   )}
                 </>
               )}
+            </div>
+          )}
+
+          {status.kind === "barcode-found" && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-5 text-center bg-card text-foreground overflow-y-auto">
+              <ScanLine className="h-10 w-10 text-primary" />
+              <p className="font-bold text-base">{t.barcode_title}</p>
+              <code className="font-mono text-sm bg-muted px-3 py-1.5 rounded-md tabular-nums select-all break-all max-w-full">
+                {status.code}
+              </code>
+              <p className="text-xs text-muted-foreground leading-relaxed max-w-xs">{t.barcode_body}</p>
             </div>
           )}
 
