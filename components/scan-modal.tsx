@@ -421,15 +421,20 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
         </div>
 
         <div className="relative aspect-[4/3] bg-black overflow-hidden">
+          {/* Video element is always mounted so its srcObject stays attached
+              when the user toggles between scanning and result states. */}
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className={cn(
+              "absolute inset-0 w-full h-full object-cover",
+              !showLiveCamera && "invisible",
+            )}
+          />
           {showLiveCamera && (
             <>
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="absolute inset-0 w-full h-full object-cover"
-              />
               <Viewfinder pulsing={status.kind === "scanning"} />
               {status.kind === "init" && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/40 backdrop-blur-sm">
