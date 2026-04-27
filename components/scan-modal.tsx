@@ -346,10 +346,27 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
     }
   }
 
-  // Manual wattage entry: skip OCR entirely.
+  // Manual wattage entry. If the user typed a name, that's a strong signal they want
+  // a CUSTOM appliance — skip the catalog match and add directly. Otherwise try the
+  // catalog and let them confirm a match (or add as custom from the result screen).
   function submitManualWatts() {
     const n = parseInt(manualWattsInput, 10);
     if (!Number.isFinite(n) || n < 5 || n > 15000) return;
+    const trimmedName = manualNameInput.trim();
+
+    if (trimmedName) {
+      onAdd({
+        applianceId: "custom",
+        variantId: makeCustomId(),
+        count: 1,
+        customWatts: n,
+        customLabel: trimmedName,
+        customIcon: suggestIconForWatts(n),
+      });
+      onClose();
+      return;
+    }
+
     const match = findClosestVariant(n, catalog);
     setStatus({ kind: "result", watts: n, match, method: "manual" });
     setManualWattsInput("");
@@ -526,6 +543,13 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
                     placeholder={t.manual_placeholder}
                     useLabel={t.manual_use}
                     wattsUnit={t.watts_unit}
+                    iconPreview={parseInt(manualWattsInput, 10) >= 5 ? suggestIconForWatts(parseInt(manualWattsInput, 10)) : undefined}
+                  />
+                  <NameInput
+                    value={manualNameInput}
+                    onChange={setManualNameInput}
+                    label={t.manual_name_label}
+                    placeholder={t.manual_name_placeholder}
                   />
                 </>
               ) : (
@@ -696,6 +720,7 @@ function ManualWattsInput({
   placeholder,
   useLabel,
   wattsUnit,
+  iconPreview,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -704,9 +729,14 @@ function ManualWattsInput({
   placeholder: string;
   useLabel: string;
   wattsUnit: string;
+  iconPreview?: string;
 }) {
   const n = parseInt(value, 10);
   const valid = Number.isFinite(n) && n >= 5 && n <= 15000;
+  const PreviewIcon = iconPreview
+    ? ((Icons as unknown as Record<string, typeof Keyboard>)[toPascal(iconPreview)] ?? null)
+    : null;
+
   return (
     <div className="w-full max-w-xs mt-1 space-y-2">
       <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground flex items-center gap-1.5 justify-center">
@@ -718,6 +748,11 @@ function ManualWattsInput({
         className="flex items-center gap-2"
       >
         <div className="relative flex-1">
+          {PreviewIcon && (
+            <span className="absolute start-2.5 top-1/2 -translate-y-1/2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-primary pointer-events-none">
+              <PreviewIcon className="h-3.5 w-3.5" />
+            </span>
+          )}
           <input
             type="number"
             inputMode="numeric"
@@ -726,7 +761,10 @@ function ManualWattsInput({
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
-            className="w-full h-10 ps-3 pe-9 rounded-full border border-border bg-input-background text-foreground text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring"
+            className={cn(
+              "w-full h-10 pe-9 rounded-full border border-border bg-input-background text-foreground text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring",
+              PreviewIcon ? "ps-10" : "ps-3",
+            )}
           />
           <span className="absolute end-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-medium pointer-events-none">
             {wattsUnit}
