@@ -1,12 +1,13 @@
 "use client";
 
+import { Suspense } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Globe } from "lucide-react";
 
 interface Props { currentLocale: "ar" | "en" }
 
-export function LangToggle({ currentLocale }: Props) {
+function LangToggleInner({ currentLocale }: Props) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const target = currentLocale === "ar" ? "en" : "ar";
@@ -23,5 +24,20 @@ export function LangToggle({ currentLocale }: Props) {
       <Globe className="h-4 w-4" />
       {label}
     </Link>
+  );
+}
+
+export function LangToggle(props: Props) {
+  return (
+    <Suspense
+      fallback={
+        <span className="inline-flex items-center gap-2 rounded-full bg-white text-primary px-4 py-2 text-sm font-semibold shadow-sm">
+          <Globe className="h-4 w-4" />
+          {props.currentLocale === "ar" ? "English" : "العربية"}
+        </span>
+      }
+    >
+      <LangToggleInner {...props} />
+    </Suspense>
   );
 }

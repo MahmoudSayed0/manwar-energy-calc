@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, Battery, Check, CircleDollarSign, Loader2, Sparkles, Zap } from "lucide-react";
+import { ArrowLeft, ArrowRight, Battery, Camera, Check, CircleDollarSign, Loader2, Sparkles, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { calculateSizing } from "@/lib/sizing";
@@ -10,6 +10,7 @@ import { estimatePriceEgp, type PricingTier } from "@/lib/price-estimate";
 import type { Appliance, AppliancePick, ApplianceCategory } from "@/lib/types";
 import { CategorySection } from "./category-section";
 import { HoursPicker } from "./hours-picker";
+import { ScanModal } from "./scan-modal";
 import { WizardProgress } from "./wizard-progress";
 
 interface Props {
@@ -49,6 +50,8 @@ interface Dictionary {
   loader_steps: string[];
   summary_count: string;
   summary_watts: string;
+  scan_cta: string;
+  scan_added: string;
 }
 
 function getDict(locale: "ar" | "en"): Dictionary {
@@ -114,6 +117,8 @@ function getDict(locale: "ar" | "en"): Dictionary {
       loader_steps: ["بنحسب احتياج بيتك", "بنحدد حجم الإنفرتر", "بنختار البطاريات والمحلات"],
       summary_count: "جهاز",
       summary_watts: "وات",
+      scan_cta: "ادخل بالكاميرا",
+      scan_added: "اتضاف للقائمة",
     };
   }
   return {
@@ -177,6 +182,8 @@ function getDict(locale: "ar" | "en"): Dictionary {
     loader_steps: ["Crunching your home's load", "Sizing the inverter", "Picking batteries & shops"],
     summary_count: "items",
     summary_watts: "W",
+    scan_cta: "Scan with camera",
+    scan_added: "Added to your list",
   };
 }
 
@@ -190,6 +197,7 @@ export function CalculatorForm({ appliances, pricing, locale }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [loaderStep, setLoaderStep] = useState(0);
   const [hydrated, setHydrated] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
 
   // Restore wizard state from localStorage on mount (survives language toggle / page refresh).
   useEffect(() => {
@@ -287,6 +295,20 @@ export function CalculatorForm({ appliances, pricing, locale }: Props) {
     if (stepIndex > 0) advance(stepIndex - 1);
   }
 
+  function addScannedPick(scanned: AppliancePick) {
+    // Merge with existing picks: if the same variant is already there, increment count.
+    setPicks(prev => {
+      const existing = prev.find(p => p.applianceId === scanned.applianceId && p.variantId === scanned.variantId);
+      if (existing) {
+        return prev.map(p =>
+          p === existing ? { ...p, count: p.count + scanned.count } : p,
+        );
+      }
+      return [...prev, scanned];
+    });
+    toast.success(t.scan_added);
+  }
+
   async function submit() {
     if (picks.length === 0) {
       toast.error(locale === "ar" ? "اختر جهاز واحد على الأقل" : "Pick at least one appliance");
@@ -327,9 +349,19 @@ export function CalculatorForm({ appliances, pricing, locale }: Props) {
         >
           <div className="min-h-full flex flex-col items-center justify-center gap-10 md:gap-14 py-4">
             {/* Step heading */}
-            <div className="text-center max-w-2xl mx-auto space-y-2">
+            <div className="text-center max-w-2xl mx-auto space-y-3">
               <h2 className="text-2xl md:text-4xl font-extrabold tracking-tight">{currentTitle}</h2>
               <p className="text-sm md:text-base text-muted-foreground leading-relaxed">{currentDescription}</p>
+              {isCategoryStep && (
+                <button
+                  type="button"
+                  onClick={() => setScanOpen(true)}
+                  className="mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/15 transition-colors"
+                >
+                  <Camera className="h-4 w-4" />
+                  {t.scan_cta}
+                </button>
+              )}
             </div>
 
             {/* Step body */}
@@ -427,6 +459,15 @@ export function CalculatorForm({ appliances, pricing, locale }: Props) {
           </div>
         </div>
       </div>
+
+      {scanOpen && (
+        <ScanModal
+          catalog={appliances}
+          locale={locale}
+          onAdd={addScannedPick}
+          onClose={() => setScanOpen(false)}
+        />
+      )}
 
       {submitting && (
         <div
