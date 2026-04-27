@@ -84,8 +84,8 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
         match_label: "الجهاز الأقرب",
         confirm: "أضف",
         close: "إغلاق",
-        barcode_title: "اتقرى الباركود",
-        barcode_body: "قرينا الكود من الباكدج، بس لسة معندناش قاعدة بيانات تربط الباركود بالجهاز. وجّه الكاميرا على لوحة المواصفات (اللي مكتوب فيها 220V 150W) عشان نعرف القدرة.",
+        barcode_title: "ما لقيناش قدرة في الصورة",
+        barcode_body: "شفنا باركود/كود سيريال على اللوحة، بس ده مش بيقولنا القدرة. وجّه الكاميرا على المكان اللي مكتوب فيه 220V 150W في اللوحة، أو اكتب القدرة يدوي.",
         camera_error: "ما قدرناش نفتح الكاميرا",
         camera_error_hint: "تأكد إنك سمحت بالكاميرا في إعدادات المتصفح، أو ارفع صورة من جهازك.",
         ocr_error: "حصلت مشكلة في القراءة",
@@ -115,8 +115,8 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
         match_label: "Closest match",
         confirm: "Add",
         close: "Close",
-        barcode_title: "Barcode detected",
-        barcode_body: "We read the barcode from the packaging, but we don't have a barcode-to-appliance lookup yet. Point the camera at the spec plate instead (the one with 220V 150W) so we can read the wattage.",
+        barcode_title: "Couldn't find watts on this label",
+        barcode_body: "We saw a barcode or serial code, but it doesn't tell us the wattage. Point the camera at the part of the plate that says 220V 150W, or type the wattage manually below.",
         camera_error: "Couldn't access the camera",
         camera_error_hint: "Make sure you allowed camera access — or upload an image from your device instead.",
         ocr_error: "Something went wrong while reading",
@@ -211,18 +211,10 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
       }
 
       try {
-        // Try barcode first (fast, ~50ms when present, instant when absent)
-        const code = await tryDetectBarcode(canvas);
-        if (cancelledRef.current) return;
-        if (code) {
-          setStatus({ kind: "barcode-found", code });
-          return;
-        }
-
+        // OCR first — the spec-plate text is the data we actually want.
         const { data } = await workerRef.current!.recognize(canvas);
         if (cancelledRef.current) return;
 
-        // Surface a short snippet of what OCR saw so the user knows it's working.
         const snippet = data.text.replace(/\s+/g, " ").trim().slice(0, 60);
         if (snippet) lastSeen = snippet;
 
@@ -230,6 +222,15 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
         if (r != null) {
           const match = findClosestVariant(r.watts, catalog);
           setStatus({ kind: "result", watts: r.watts, match, method: r.method });
+          return;
+        }
+
+        // OCR didn't find watts. Try a barcode as a last resort —
+        // we can at least surface what we saw before giving up.
+        const code = await tryDetectBarcode(canvas);
+        if (cancelledRef.current) return;
+        if (code) {
+          setStatus({ kind: "barcode-found", code });
           return;
         }
       } catch {
@@ -251,16 +252,22 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
     }
     setStatus({ kind: "scanning", attempts: 0 });
     try {
+      // OCR first — gives us the wattage we actually need.
+      const { data } = await workerRef.current.recognize(canvas);
+      const r = extractOrCalculateWatts(data.text);
+      if (r != null) {
+        const match = findClosestVariant(r.watts, catalog);
+        setStatus({ kind: "result", watts: r.watts, match, method: r.method });
+        return;
+      }
+      // No watts found; try barcode as a fallback.
       const code = await tryDetectBarcode(canvas);
       if (code) {
         setStatus({ kind: "barcode-found", code });
         return;
       }
-      const { data } = await workerRef.current.recognize(canvas);
-      const r = extractOrCalculateWatts(data.text);
-      const watts = r?.watts ?? null;
-      const match = watts != null ? findClosestVariant(watts, catalog) : null;
-      setStatus({ kind: "result", watts, match, method: r?.method });
+      // Nothing useful — surface "no watts" with the manual-entry option.
+      setStatus({ kind: "result", watts: null, match: null });
     } catch (err) {
       setStatus({
         kind: "ocr-error",
@@ -303,18 +310,25 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
       if (!ctx) throw new Error("Canvas not available");
       ctx.drawImage(img, 0, 0);
 
-      // Try barcode first — uploaded images are often packaging photos.
+      // OCR first — if the image is a spec plate, this gives us watts.
+      const { data } = await workerRef.current!.recognize(canvas);
+      const r = extractOrCalculateWatts(data.text);
+      if (r != null) {
+        const match = findClosestVariant(r.watts, catalog);
+        setStatus({ kind: "result", watts: r.watts, match, method: r.method });
+        return;
+      }
+
+      // OCR didn't find watts. If the image was a packaging barcode photo,
+      // surface the code so the user knows we processed something.
       const code = await tryDetectBarcode(img);
       if (code) {
         setStatus({ kind: "barcode-found", code });
         return;
       }
 
-      const { data } = await workerRef.current!.recognize(canvas);
-      const r = extractOrCalculateWatts(data.text);
-      const watts = r?.watts ?? null;
-      const match = watts != null ? findClosestVariant(watts, catalog) : null;
-      setStatus({ kind: "result", watts, match, method: r?.method });
+      // Nothing usable — show the no-watts result with manual entry.
+      setStatus({ kind: "result", watts: null, match: null });
     } catch (err) {
       setStatus({
         kind: "ocr-error",
@@ -497,12 +511,21 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
 
           {status.kind === "barcode-found" && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-5 text-center bg-card text-foreground overflow-y-auto">
-              <ScanLine className="h-10 w-10 text-primary" />
-              <p className="font-bold text-base">{t.barcode_title}</p>
-              <code className="font-mono text-sm bg-muted px-3 py-1.5 rounded-md tabular-nums select-all break-all max-w-full">
-                {status.code}
-              </code>
+              <ScanLine className="h-9 w-9 text-warning" />
+              <p className="font-bold text-sm">{t.barcode_title}</p>
               <p className="text-xs text-muted-foreground leading-relaxed max-w-xs">{t.barcode_body}</p>
+              <p className="text-[10px] text-muted-foreground/70 font-mono break-all max-w-full">
+                {status.code}
+              </p>
+              <ManualWattsInput
+                value={manualWattsInput}
+                onChange={setManualWattsInput}
+                onSubmit={submitManualWatts}
+                label={t.manual_label}
+                placeholder={t.manual_placeholder}
+                useLabel={t.manual_use}
+                wattsUnit={t.watts_unit}
+              />
             </div>
           )}
 
