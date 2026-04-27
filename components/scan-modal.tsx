@@ -16,15 +16,15 @@ interface Props {
 
 type Status =
   | { kind: "init" }
-  | { kind: "scanning"; attempts: number }
+  | { kind: "scanning"; attempts: number; lastSeen?: string }
   | { kind: "result"; watts: number | null; match: ReturnType<typeof findClosestVariant> }
   | { kind: "camera-error"; message: string }
   | { kind: "ocr-error"; message: string };
 
 // Cooldown between auto-scan attempts (lets the camera refocus and saves battery).
-const SCAN_COOLDOWN_MS = 600;
+const SCAN_COOLDOWN_MS = 500;
 // Show a "still searching..." hint after this many failed attempts.
-const HINT_AFTER_ATTEMPTS = 4;
+const HINT_AFTER_ATTEMPTS = 3;
 
 // Type for the Tesseract worker without pulling tesseract types into the main bundle.
 type TesseractWorker = {
@@ -159,12 +159,13 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
 
   async function runScanLoop() {
     let attempts = 0;
+    let lastSeen: string | undefined;
     // Brief warm-up so the camera has time to focus before the first capture.
-    await sleep(700);
+    await sleep(500);
 
     while (!cancelledRef.current) {
       attempts += 1;
-      setStatus({ kind: "scanning", attempts });
+      setStatus({ kind: "scanning", attempts, lastSeen });
 
       const canvas = captureCroppedFrame();
       if (!canvas) {
@@ -176,13 +177,17 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
         const { data } = await workerRef.current!.recognize(canvas);
         if (cancelledRef.current) return;
 
+        // Surface a short snippet of what OCR saw so the user knows it's working.
+        const snippet = data.text.replace(/\s+/g, " ").trim().slice(0, 60);
+        if (snippet) lastSeen = snippet;
+
         const watts = extractWatts(data.text);
         if (watts != null) {
+          // Stop on the first wattage we find — regardless of whether the catalog has a match.
+          // The user sees the reading either way, with the closest variant if one exists.
           const match = findClosestVariant(watts, catalog);
-          if (match) {
-            setStatus({ kind: "result", watts, match });
-            return;
-          }
+          setStatus({ kind: "result", watts, match });
+          return;
         }
       } catch {
         // Swallow individual-iteration errors and keep trying.
@@ -219,10 +224,11 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
     const video = videoRef.current;
     if (!video || video.videoWidth === 0) return null;
 
+    // Crop to a wider area (~85% × 55%) to be more forgiving about how the user frames the plate.
     const fullW = video.videoWidth;
     const fullH = video.videoHeight;
-    const cropW = Math.round(fullW * 0.7);
-    const cropH = Math.round(fullH * 0.35);
+    const cropW = Math.round(fullW * 0.85);
+    const cropH = Math.round(fullH * 0.55);
     const cropX = Math.round((fullW - cropW) / 2);
     const cropY = Math.round((fullH - cropH) / 2);
 
@@ -303,13 +309,21 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
                 </div>
               )}
               {status.kind === "scanning" && (
-                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/60 text-white text-xs font-medium backdrop-blur-sm">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary/80" />
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-                  </span>
-                  {t.hint_scanning}
-                </div>
+                <>
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/60 text-white text-xs font-medium backdrop-blur-sm">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary/80" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+                    </span>
+                    {t.hint_scanning}
+                    <span className="text-white/60 tabular-nums">· {status.attempts}</span>
+                  </div>
+                  {status.lastSeen && status.attempts >= HINT_AFTER_ATTEMPTS && (
+                    <div className="absolute top-3 left-3 right-3 mx-auto max-w-xs px-3 py-2 rounded-lg bg-black/70 text-white/90 text-[10px] font-mono backdrop-blur-sm truncate">
+                      {status.lastSeen}
+                    </div>
+                  )}
+                </>
               )}
             </>
           )}
@@ -401,7 +415,7 @@ function Viewfinder({ pulsing }: { pulsing: boolean }) {
     <div aria-hidden className="absolute inset-0 pointer-events-none flex items-center justify-center">
       <div
         className={cn(
-          "w-[70%] h-[35%] rounded-xl border-2 border-white/90 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)] transition-all",
+          "w-[85%] h-[55%] rounded-xl border-2 border-white/90 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)] transition-all",
           pulsing && "ring-4 ring-primary/40 animate-pulse",
         )}
       />
