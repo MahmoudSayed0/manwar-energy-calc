@@ -59,6 +59,7 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
   const cancelledRef = useRef(false);
   const [status, setStatus] = useState<Status>({ kind: "init" });
   const [manualWattsInput, setManualWattsInput] = useState("");
+  const [manualNameInput, setManualNameInput] = useState("");
 
   const t = locale === "ar"
     ? {
@@ -79,10 +80,13 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
         manual_label: "اكتب القدرة بنفسك",
         manual_placeholder: "مثلًا 150",
         manual_use: "استخدم",
+        manual_name_label: "اسم الجهاز (اختياري)",
+        manual_name_placeholder: "مثلًا تلاجة الصغيرة",
         no_match: "ما لقيناش جهاز قريب في القائمة",
-        no_match_hint: "ممكن جهازك مش في كتالوجنا. ضيفه يدوي من الخطوة.",
+        no_match_hint: "تقدر تضيفه كجهاز مخصص بنفس القدرة.",
         match_label: "الجهاز الأقرب",
         confirm: "أضف",
+        add_custom: "أضف كجهاز مخصص",
         close: "إغلاق",
         barcode_title: "ما لقيناش قدرة في الصورة",
         barcode_body: "شفنا باركود/كود سيريال على اللوحة، بس ده مش بيقولنا القدرة. وجّه الكاميرا على المكان اللي مكتوب فيه 220V 150W في اللوحة، أو اكتب القدرة يدوي.",
@@ -110,10 +114,13 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
         manual_label: "Or type the wattage yourself",
         manual_placeholder: "e.g. 150",
         manual_use: "Use",
+        manual_name_label: "Name (optional)",
+        manual_name_placeholder: "e.g. small fridge",
         no_match: "No close match in our catalog",
-        no_match_hint: "Your appliance might not be in our list — go back and add it manually from the step.",
+        no_match_hint: "You can add it as a custom appliance with the same wattage.",
         match_label: "Closest match",
         confirm: "Add",
+        add_custom: "Add as custom",
         close: "Close",
         barcode_title: "Couldn't find watts on this label",
         barcode_body: "We saw a barcode or serial code, but it doesn't tell us the wattage. Point the camera at the part of the plate that says 220V 150W, or type the wattage manually below.",
@@ -348,6 +355,16 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
     setManualWattsInput("");
   }
 
+  // When a custom name is provided, the icon is derived from the wattage range.
+  function suggestIconForWatts(w: number): string {
+    if (w <= 25) return "lightbulb";
+    if (w <= 100) return "tv";
+    if (w <= 300) return "laptop";
+    if (w <= 800) return "microwave";
+    if (w <= 1500) return "wind";
+    return "air-vent";
+  }
+
   function captureCroppedFrame(): HTMLCanvasElement | null {
     const video = videoRef.current;
     if (!video || video.videoWidth === 0) return null;
@@ -386,6 +403,23 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
       applianceId: status.match.appliance.id,
       variantId: status.match.variant.id,
       count: 1,
+    });
+    onClose();
+  }
+
+  function confirmCustom() {
+    if (status.kind !== "result" || status.watts == null) return;
+    const fallbackLabel = locale === "ar"
+      ? `جهاز مخصص · ${status.watts} وات`
+      : `Custom · ${status.watts} W`;
+    const trimmedName = manualNameInput.trim();
+    onAdd({
+      applianceId: "custom",
+      variantId: makeCustomId(),
+      count: 1,
+      customWatts: status.watts,
+      customLabel: trimmedName || fallbackLabel,
+      customIcon: suggestIconForWatts(status.watts),
     });
     onClose();
   }
@@ -507,7 +541,16 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
                   {status.match ? (
                     <MatchPreview match={status.match} locale={locale} matchLabel={t.match_label} />
                   ) : (
-                    <p className="text-xs text-muted-foreground max-w-xs">{t.no_match} — {t.no_match_hint}</p>
+                    <>
+                      <p className="text-xs text-muted-foreground max-w-xs">{t.no_match}</p>
+                      <p className="text-xs text-muted-foreground max-w-xs">{t.no_match_hint}</p>
+                      <NameInput
+                        value={manualNameInput}
+                        onChange={setManualNameInput}
+                        label={t.manual_name_label}
+                        placeholder={t.manual_name_placeholder}
+                      />
+                    </>
                   )}
                 </>
               )}
@@ -599,10 +642,48 @@ export function ScanModal({ catalog, locale, onAdd, onClose }: Props) {
                   {t.confirm}
                 </button>
               )}
+              {status.kind === "result" && status.watts != null && !status.match && (
+                <button
+                  type="button"
+                  onClick={confirmCustom}
+                  className="inline-flex items-center justify-center gap-2 h-11 px-6 rounded-full bg-primary text-primary-foreground font-semibold shadow-md hover:bg-[hsl(var(--primary-dark))] hover:shadow-lg transition-all text-sm"
+                >
+                  <Check className="h-4 w-4" />
+                  {t.add_custom}
+                </button>
+              )}
             </>
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function NameInput({
+  value,
+  onChange,
+  label,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  label: string;
+  placeholder: string;
+}) {
+  return (
+    <div className="w-full max-w-xs space-y-1.5">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+        {label}
+      </p>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        maxLength={40}
+        className="w-full h-10 px-3 rounded-full border border-border bg-input-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+      />
     </div>
   );
 }
@@ -714,4 +795,11 @@ function toPascal(s: string): string {
 
 function sleep(ms: number) {
   return new Promise<void>(resolve => setTimeout(resolve, ms));
+}
+
+function makeCustomId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `custom-${crypto.randomUUID()}`;
+  }
+  return `custom-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }

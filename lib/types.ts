@@ -27,6 +27,13 @@ export interface AppliancePick {
   variantId: string;
   count: number;
   isInverter?: boolean;
+  // For appliances added via the scanner that don't match the catalog,
+  // OR via manual wattage entry. Bypasses the appliance/variant lookup
+  // in calculateSizing and uses these values directly.
+  customWatts?: number;
+  customLabel?: string;
+  customInductive?: boolean;
+  customIcon?: string; // lucide-react icon name (kebab or PascalCase) for custom appliances
 }
 
 export interface SizingInput {

@@ -138,6 +138,52 @@ describe("calculateSizing — inverter AC (soft-start, no surge)", () => {
   });
 });
 
+describe("calculateSizing — custom picks (from scanner / manual entry)", () => {
+  it("uses customWatts directly without looking up the catalog", () => {
+    const r = calculateSizing(
+      {
+        picks: [
+          { applianceId: "custom", variantId: "c1", count: 1, customWatts: 800, customLabel: "Some hairdryer" },
+        ],
+        backupHours: 4,
+      },
+      [],
+    );
+    // 800 W × 1.20 = 960 W → 1 kW inverter, 12V
+    expect(r.inverterKw).toBe(1);
+    expect(r.systemVoltage).toBe(12);
+    expect(r.totalRunningWatts).toBe(800);
+  });
+
+  it("counts customWatts × pick.count", () => {
+    const r = calculateSizing(
+      {
+        picks: [
+          { applianceId: "custom", variantId: "c1", count: 3, customWatts: 60 },
+        ],
+        backupHours: 4,
+      },
+      [],
+    );
+    expect(r.totalRunningWatts).toBe(180);
+  });
+
+  it("respects customInductive for surge math", () => {
+    const r = calculateSizing(
+      {
+        picks: [
+          { applianceId: "custom", variantId: "c1", count: 1, customWatts: 1500, customInductive: true },
+        ],
+        backupHours: 4,
+      },
+      [],
+    );
+    // For custom inductive, surge equals running (we don't know the real surge ratio),
+    // so surge_extra = 0 → required = 1500 × 1.20 = 1800 W → 2 kW
+    expect(r.inverterKw).toBe(2);
+  });
+});
+
 describe("estimatePriceEgp", () => {
   it("3kW inverter + 1× 200Ah at 24V, mid-tier pricing", () => {
     const r = estimatePriceEgp(3, 1, 200, 24, {

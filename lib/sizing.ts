@@ -32,15 +32,29 @@ export function calculateSizing(input: SizingInput, catalog: Appliance[]): Sizin
   let maxSurgeExtra = 0;
 
   for (const pick of input.picks) {
-    const appl = catalog.find(a => a.id === pick.applianceId);
-    if (!appl) continue;
-    const variant = appl.variants.find(v => v.id === pick.variantId);
-    if (!variant) continue;
+    let runningW: number;
+    let surgeW: number;
+    let inductive: boolean;
 
-    sumRunningW += variant.running_watts * pick.count;
+    if (pick.customWatts != null) {
+      // Custom appliance from scan/manual entry — use the user-supplied wattage directly.
+      runningW = pick.customWatts;
+      surgeW = pick.customWatts;
+      inductive = pick.customInductive ?? false;
+    } else {
+      const appl = catalog.find(a => a.id === pick.applianceId);
+      if (!appl) continue;
+      const variant = appl.variants.find(v => v.id === pick.variantId);
+      if (!variant) continue;
+      runningW = variant.running_watts;
+      surgeW = variant.surge_watts;
+      inductive = appl.inductive;
+    }
 
-    if (appl.inductive && !pick.isInverter) {
-      const extra = (variant.surge_watts - variant.running_watts) * pick.count;
+    sumRunningW += runningW * pick.count;
+
+    if (inductive && !pick.isInverter) {
+      const extra = (surgeW - runningW) * pick.count;
       if (extra > maxSurgeExtra) maxSurgeExtra = extra;
     }
   }

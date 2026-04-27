@@ -11,6 +11,7 @@ import type { Appliance, AppliancePick, ApplianceCategory } from "@/lib/types";
 import { CategorySection } from "./category-section";
 import { HoursPicker } from "./hours-picker";
 import { ScanModal } from "./scan-modal";
+import { SelectedItemsDialog } from "./selected-items-dialog";
 import { WizardProgress } from "./wizard-progress";
 
 interface Props {
@@ -198,6 +199,7 @@ export function CalculatorForm({ appliances, pricing, locale }: Props) {
   const [loaderStep, setLoaderStep] = useState(0);
   const [hydrated, setHydrated] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
+  const [selectionOpen, setSelectionOpen] = useState(false);
 
   // Restore wizard state from localStorage on mount (survives language toggle / page refresh).
   useEffect(() => {
@@ -250,6 +252,10 @@ export function CalculatorForm({ appliances, pricing, locale }: Props) {
   const totalRunningWatts = useMemo(() => {
     let sum = 0;
     for (const p of picks) {
+      if (p.customWatts != null) {
+        sum += p.customWatts * p.count;
+        continue;
+      }
       const a = appliances.find(x => x.id === p.applianceId);
       const v = a?.variants.find(x => x.id === p.variantId);
       if (v) sum += v.running_watts * p.count;
@@ -404,13 +410,18 @@ export function CalculatorForm({ appliances, pricing, locale }: Props) {
           </button>
 
           {totalPicks > 0 && (
-            <div className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-full bg-card border border-border shadow-sm text-sm">
+            <button
+              type="button"
+              onClick={() => setSelectionOpen(true)}
+              className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-full bg-card border border-border shadow-sm text-xs sm:text-sm hover:bg-muted hover:border-primary/40 transition-colors"
+              aria-label={t.summary_count}
+            >
               <span className="font-bold tabular-nums">{totalPicks}</span>
-              <span className="text-muted-foreground">{t.summary_count}</span>
+              <span className="text-muted-foreground hidden sm:inline">{t.summary_count}</span>
               <span className="text-border" aria-hidden>·</span>
               <span className="font-bold tabular-nums">{totalRunningWatts.toLocaleString()}</span>
               <span className="text-muted-foreground">{t.summary_watts}</span>
-            </div>
+            </button>
           )}
 
           <div className="flex items-center gap-2 md:gap-3">
@@ -466,6 +477,16 @@ export function CalculatorForm({ appliances, pricing, locale }: Props) {
           locale={locale}
           onAdd={addScannedPick}
           onClose={() => setScanOpen(false)}
+        />
+      )}
+
+      {selectionOpen && (
+        <SelectedItemsDialog
+          picks={picks}
+          appliances={appliances}
+          locale={locale}
+          onPicksChange={setPicks}
+          onClose={() => setSelectionOpen(false)}
         />
       )}
 
