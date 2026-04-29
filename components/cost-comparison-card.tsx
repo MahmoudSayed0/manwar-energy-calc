@@ -1,5 +1,5 @@
 import { Card } from "@/components/ui/card";
-import { Battery, Fuel, Volume2, VolumeX, Zap, Wrench, Leaf, Wind, Check, X, TrendingDown } from "lucide-react";
+import { Battery, Zap, ShieldCheck, Plug, Lightbulb, Check, X, Wallet } from "lucide-react";
 
 interface Props {
   watts: number;
@@ -9,19 +9,10 @@ interface Props {
   locale: "ar" | "en";
 }
 
-// Egypt-market assumptions (April 2026, conservative).
-const FUEL_EGP_PER_LITER = 14;             // gasoline/diesel mid price
-const GEN_EFFICIENCY_L_PER_KWH = 0.5;       // small portable, half-load
-const MAINTENANCE_RATIO = 0.10;             // 10% of fuel cost annually
+// Egypt residential electricity assumptions (April 2026, mid-tier average).
+const EGP_PER_KWH = 1.45;
 const HORIZON_YEARS = 5;
-const BATTERY_LIFE_YEARS = 8;               // typical lithium
-
-function generatorUnitCost(watts: number): number {
-  if (watts <= 2000) return 12000;
-  if (watts <= 4000) return 18000;
-  if (watts <= 6000) return 25000;
-  return 35000;
-}
+const BATTERY_LIFE_YEARS = 8;
 
 function fmt(n: number): string {
   return Math.round(n).toLocaleString();
@@ -31,114 +22,109 @@ export function CostComparisonCard({ watts, hours, priceMin, priceMax, locale }:
   const isAr = locale === "ar";
 
   const dailyKWh = (watts / 1000) * hours;
-  const dailyLiters = dailyKWh * GEN_EFFICIENCY_L_PER_KWH;
-  const monthlyFuel = dailyLiters * 30 * FUEL_EGP_PER_LITER;
-  const yearlyFuel = monthlyFuel * 12;
-  const yearlyMaintenance = yearlyFuel * MAINTENANCE_RATIO;
-  const yearlyOngoing = yearlyFuel + yearlyMaintenance;
+  const monthlyKWh = dailyKWh * 30;
+  const yearlyKWh = dailyKWh * 365;
 
-  const generatorUnit = generatorUnitCost(watts);
-  const generator5y = generatorUnit + yearlyOngoing * HORIZON_YEARS;
+  const monthlyBill = monthlyKWh * EGP_PER_KWH;
+  const yearlyBill = yearlyKWh * EGP_PER_KWH;
+  const fiveYearBill = yearlyBill * HORIZON_YEARS;
 
   const batteryMid = (priceMin + priceMax) / 2;
-  const savings = generator5y - batteryMid;
-  const batteryWins = savings > 0;
+  const ratio = fiveYearBill > 0 ? batteryMid / fiveYearBill : 0;
 
   const t = isAr
     ? {
-        title: "البطارية ولا الموتور؟",
-        subtitle: `مقارنة على ${HORIZON_YEARS} سنين`,
+        eyebrow: "هل البطارية بتوفر فلوس؟",
+        title: "البطارية ولا فاتورة الكهربا؟",
+        body: "بنقارن سعر نظام البطارية بفاتورة الكهربا اللي هتدفعها لتشغيل نفس الأجهزة خلال ساعات القطع.",
+        battery_badge: "موثوقية",
         battery_label: "نظام البطارية",
-        battery_sub: "دفعة واحدة",
-        gen_label: "موتور كهربا",
-        gen_sub: `تكلفة ${HORIZON_YEARS} سنين`,
-        horizon_note: `بناءً على استهلاكك (${watts.toLocaleString()} وات لـ ${hours} ساعات يوميًا).`,
+        battery_sub: "دفعة واحدة · بيدوم 8 سنين",
+        bills_badge: "الكهربا نفسها",
+        bills_label: "فاتورة الكهربا",
+        bills_sub: `إجمالي ${HORIZON_YEARS} سنين`,
+        per_month: "في الشهر",
+        per_year: "في السنة",
+        kwh: "ك.و.س",
         battery_pros: [
-          "صامت تمامًا — مفيش صوت موتور",
-          "بيشتغل فوري لما الكهربا تقطع",
-          `عمره ${BATTERY_LIFE_YEARS} سنين تقريبًا`,
-          "مفيش عوادم ولا دخان",
-          "صيانة قليلة جدًا",
+          "بتشغل بيتك وقت قطع الكهربا",
+          "صامت وبيشتغل فوري",
+          `بيدوم حوالي ${BATTERY_LIFE_YEARS} سنين`,
+          "مفيش عوادم ولا ضوضاء",
         ],
-        gen_cons: [
-          "صوت موتور عالي وقت التشغيل",
-          "بياخد ثواني عشان يشتغل بعد القطع",
-          "بنزين/سولار لازم تجدده باستمرار",
-          "عوادم ودخان وتلوث",
-          "تغيير زيت وفلتر كل فترة",
+        bills_points: [
+          { good: true, text: "مفيش تكلفة دفعة واحدة كبيرة" },
+          { good: false, text: "لما الكهربا تقطع، الأجهزة بتقف" },
+          { good: false, text: "أكل التلاجة بيخرب وقت القطع الطويل" },
+          { good: false, text: "صعب تشتغل أو تذاكر وقت القطع" },
         ],
-        verdict_save: `البطارية بتوفرلك حوالي ${fmt(Math.abs(savings))} جنيه على ${HORIZON_YEARS} سنين، وكمان تفضل ساكن من غير صوت ولا تلوث.`,
-        verdict_costlier: `الموتور أرخص بحوالي ${fmt(Math.abs(savings))} جنيه على ${HORIZON_YEARS} سنين، بس هتعيش مع الصوت والعوادم.`,
-        gen_unit_label: "تكلفة الموتور",
-        gen_fuel_label: "بنزين/سولار سنوي",
-        gen_maint_label: "صيانة سنوية",
-        gen_total_label: `الإجمالي على ${HORIZON_YEARS} سنين`,
-        battery_total_label: "تكلفة دلوقتي",
-        savings_label: "الفرق",
-        eco_label: "صديق البيئة",
+        verdict_title: "الخلاصة",
+        verdict_body: `البطارية مش أرخص من الكهربا. الأجهزة دي بتاكل ${fmt(fiveYearBill)} جنيه كهربا على ${HORIZON_YEARS} سنين. البطارية أغلى، بس بتضمنلك الأجهزة دي تكمل شغالة لما الكهربا تقطع.`,
+        ratio_label: "البطارية أغلى بحوالي",
+        times: "ضعف",
       }
     : {
-        title: "Battery vs Generator",
-        subtitle: `${HORIZON_YEARS}-year comparison`,
+        eyebrow: "Does the battery save money?",
+        title: "Battery vs. electricity bills",
+        body: "Comparing the battery system to the electricity bills you'd pay to run the same appliances during your outage hours.",
+        battery_badge: "Reliability",
         battery_label: "Battery system",
-        battery_sub: "one-time",
-        gen_label: "Petrol generator",
-        gen_sub: `${HORIZON_YEARS}-year cost`,
-        horizon_note: `Based on your load (${watts.toLocaleString()} W for ${hours} h/day).`,
+        battery_sub: `One-time · lasts ${BATTERY_LIFE_YEARS} years`,
+        bills_badge: "Energy itself",
+        bills_label: "Electricity bills",
+        bills_sub: `${HORIZON_YEARS}-year total`,
+        per_month: "per month",
+        per_year: "per year",
+        kwh: "kWh",
         battery_pros: [
-          "Completely silent — no engine noise",
-          "Switches on instantly during outages",
+          "Keeps your home running during outages",
+          "Silent, instant, no fumes",
           `Lasts about ${BATTERY_LIFE_YEARS} years`,
-          "No exhaust, no fumes",
-          "Very low maintenance",
+          "Zero noise, zero pollution",
         ],
-        gen_cons: [
-          "Loud engine noise during use",
-          "Takes seconds to start after a cut",
-          "Constant refueling at the pump",
-          "Exhaust, fumes, and pollution",
-          "Oil & filter changes every few months",
+        bills_points: [
+          { good: true, text: "No big upfront cost" },
+          { good: false, text: "When the grid cuts, your appliances stop" },
+          { good: false, text: "Food spoils during long outages" },
+          { good: false, text: "Hard to work or cool down during cuts" },
         ],
-        verdict_save: `The battery saves you about ${fmt(Math.abs(savings))} EGP over ${HORIZON_YEARS} years — plus quiet nights and no fumes.`,
-        verdict_costlier: `The generator is roughly ${fmt(Math.abs(savings))} EGP cheaper over ${HORIZON_YEARS} years, but you'll live with the noise and fumes.`,
-        gen_unit_label: "Generator unit",
-        gen_fuel_label: "Fuel / year",
-        gen_maint_label: "Maintenance / year",
-        gen_total_label: `Total over ${HORIZON_YEARS} years`,
-        battery_total_label: "Cost today",
-        savings_label: "Difference",
-        eco_label: "Eco-friendly",
+        verdict_title: "Bottom line",
+        verdict_body: `The battery isn't cheaper than electricity. These appliances use about ${fmt(fiveYearBill)} EGP of grid power over ${HORIZON_YEARS} years. The battery costs more — but it's what keeps them running when the grid is down.`,
+        ratio_label: "Battery is roughly",
+        times: "× more",
       };
 
   return (
-    <Card className="relative overflow-hidden p-6 md:p-7 space-y-6 bg-card border-border">
-      <header className="space-y-1">
-        <p className="text-xs font-semibold text-primary uppercase tracking-[0.16em]">{t.subtitle}</p>
-        <h3 className="text-xl md:text-2xl font-extrabold tracking-tight">{t.title}</h3>
-        <p className="text-xs text-muted-foreground">{t.horizon_note}</p>
+    <Card className="overflow-hidden p-5 md:p-6 space-y-5 bg-card border-border shadow-sm">
+      <header className="space-y-1.5">
+        <p className="text-[10px] font-semibold text-primary uppercase tracking-[0.18em]">{t.eyebrow}</p>
+        <h3 className="text-xl md:text-2xl font-extrabold tracking-tight leading-tight">{t.title}</h3>
+        <p className="text-xs text-muted-foreground leading-relaxed">{t.body}</p>
       </header>
 
-      <div className="grid grid-cols-2 gap-3 md:gap-4">
-        {/* BATTERY column */}
-        <div className="rounded-2xl border-2 border-primary bg-primary/5 p-4 md:p-5 space-y-3 relative">
-          <span className="absolute -top-2 start-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-wider">
-            <Leaf className="h-3 w-3" />
-            {t.eco_label}
+      <div className="grid grid-cols-2 gap-3">
+        {/* BATTERY column — primary tinted */}
+        <div className="rounded-2xl border-2 border-primary bg-primary/5 p-4 space-y-3 relative">
+          <span className="absolute -top-2 start-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary text-primary-foreground text-[9px] font-bold uppercase tracking-wider">
+            <ShieldCheck className="h-2.5 w-2.5" />
+            {t.battery_badge}
           </span>
           <div className="flex items-center gap-2 pt-1">
             <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-primary/15 text-primary">
               <Battery className="h-4 w-4" />
             </span>
-            <div>
-              <p className="text-xs font-semibold">{t.battery_label}</p>
-              <p className="text-[10px] text-muted-foreground">{t.battery_sub}</p>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold truncate">{t.battery_label}</p>
+              <p className="text-[10px] text-muted-foreground truncate">{t.battery_sub}</p>
             </div>
           </div>
-          <p className="text-2xl md:text-3xl font-extrabold tabular-nums leading-tight">
-            {fmt(priceMin)}<span className="text-sm font-medium opacity-70"> – </span>{fmt(priceMax)}
-            <span className="text-xs font-medium opacity-70 ms-1">EGP</span>
+          <p className="text-xl md:text-2xl font-extrabold tabular-nums leading-tight">
+            {fmt(priceMin)}
+            <span className="text-xs font-medium opacity-70 mx-1">–</span>
+            {fmt(priceMax)}
+            <span className="text-[10px] font-medium opacity-70 ms-1">EGP</span>
           </p>
-          <ul className="space-y-1.5 text-[11px] md:text-xs leading-snug">
+          <ul className="space-y-1.5 text-[11px] leading-snug">
             {t.battery_pros.map((p, i) => (
               <li key={i} className="flex items-start gap-1.5">
                 <Check className="h-3 w-3 text-success shrink-0 mt-0.5" />
@@ -148,54 +134,66 @@ export function CostComparisonCard({ watts, hours, priceMin, priceMax, locale }:
           </ul>
         </div>
 
-        {/* GENERATOR column */}
-        <div className="rounded-2xl border border-border bg-muted/40 p-4 md:p-5 space-y-3">
-          <div className="flex items-center gap-2">
+        {/* BILLS column — neutral */}
+        <div className="rounded-2xl border border-border bg-muted/40 p-4 space-y-3 relative">
+          <span className="absolute -top-2 start-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-card border border-border text-muted-foreground text-[9px] font-bold uppercase tracking-wider">
+            <Plug className="h-2.5 w-2.5" />
+            {t.bills_badge}
+          </span>
+          <div className="flex items-center gap-2 pt-1">
             <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-warning/15 text-warning">
-              <Fuel className="h-4 w-4" />
+              <Wallet className="h-4 w-4" />
             </span>
-            <div>
-              <p className="text-xs font-semibold">{t.gen_label}</p>
-              <p className="text-[10px] text-muted-foreground">{t.gen_sub}</p>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold truncate">{t.bills_label}</p>
+              <p className="text-[10px] text-muted-foreground truncate">{t.bills_sub}</p>
             </div>
           </div>
-          <p className="text-2xl md:text-3xl font-extrabold tabular-nums leading-tight">
-            {fmt(generator5y)}
-            <span className="text-xs font-medium opacity-70 ms-1">EGP</span>
+          <p className="text-xl md:text-2xl font-extrabold tabular-nums leading-tight">
+            {fmt(fiveYearBill)}
+            <span className="text-[10px] font-medium opacity-70 ms-1">EGP</span>
           </p>
-          <ul className="space-y-1 text-[10px] md:text-[11px] tabular-nums text-muted-foreground">
-            <li className="flex justify-between"><span>{t.gen_unit_label}</span><span>{fmt(generatorUnit)}</span></li>
-            <li className="flex justify-between"><span>{t.gen_fuel_label}</span><span>{fmt(yearlyFuel)}</span></li>
-            <li className="flex justify-between"><span>{t.gen_maint_label}</span><span>{fmt(yearlyMaintenance)}</span></li>
+          <ul className="space-y-1 text-[10px] tabular-nums text-muted-foreground border-t border-border pt-2">
+            <li className="flex justify-between gap-1">
+              <span>{t.per_month}</span>
+              <span className="font-semibold text-foreground">{fmt(monthlyBill)}</span>
+            </li>
+            <li className="flex justify-between gap-1">
+              <span>{t.per_year}</span>
+              <span className="font-semibold text-foreground">{fmt(yearlyBill)}</span>
+            </li>
+            <li className="flex justify-between gap-1">
+              <span>{Math.round(yearlyKWh).toLocaleString()} {t.kwh}/year</span>
+              <span className="font-semibold text-foreground">@ {EGP_PER_KWH}</span>
+            </li>
           </ul>
-          <ul className="space-y-1.5 text-[11px] md:text-xs leading-snug pt-1 border-t border-border">
-            {t.gen_cons.map((c, i) => (
+          <ul className="space-y-1.5 text-[11px] leading-snug">
+            {t.bills_points.map((p, i) => (
               <li key={i} className="flex items-start gap-1.5">
-                <X className="h-3 w-3 text-destructive shrink-0 mt-0.5" />
-                <span>{c}</span>
+                {p.good
+                  ? <Check className="h-3 w-3 text-success shrink-0 mt-0.5" />
+                  : <X className="h-3 w-3 text-destructive shrink-0 mt-0.5" />}
+                <span>{p.text}</span>
               </li>
             ))}
           </ul>
         </div>
       </div>
 
-      <div
-        className={`rounded-2xl p-4 md:p-5 flex items-start gap-3 ${
-          batteryWins ? "bg-success/10 border border-success/30" : "bg-warning/10 border border-warning/30"
-        }`}
-      >
-        <span
-          className={`shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-xl ${
-            batteryWins ? "bg-success/20 text-success" : "bg-warning/20 text-warning"
-          }`}
-        >
-          {batteryWins ? <TrendingDown className="h-5 w-5" /> : <Wrench className="h-5 w-5" />}
+      <div className="rounded-2xl bg-gradient-to-br from-primary/8 to-primary/4 border border-primary/20 p-4 md:p-5 flex items-start gap-3">
+        <span className="shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-md shadow-primary/20">
+          <Lightbulb className="h-5 w-5" />
         </span>
-        <div className="space-y-1">
-          <p className="text-xs font-bold uppercase tracking-[0.14em]">{t.savings_label}</p>
-          <p className="text-sm md:text-base font-medium leading-relaxed">
-            {batteryWins ? t.verdict_save : t.verdict_costlier}
-          </p>
+        <div className="space-y-1.5 min-w-0">
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">{t.verdict_title}</p>
+            {ratio > 1 && (
+              <span className="text-[10px] text-muted-foreground tabular-nums">
+                · {t.ratio_label} <span className="font-bold text-foreground">{ratio.toFixed(1)}{t.times}</span>
+              </span>
+            )}
+          </div>
+          <p className="text-sm leading-relaxed">{t.verdict_body}</p>
         </div>
       </div>
     </Card>
