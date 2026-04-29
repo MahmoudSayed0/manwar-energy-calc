@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { ArrowLeft, AlertTriangle, Lightbulb, Zap, Clock, UserCheck } from "lucide-react";
 import { ResultCard } from "@/components/result-card";
+import { CostComparisonCard } from "@/components/cost-comparison-card";
 import { ShopsList } from "@/components/shops-list";
 import { LangToggle } from "@/components/lang-toggle";
 import { AnkhLogo } from "@/components/ankh-logo";
@@ -153,6 +154,7 @@ export default async function ResultPage({
   const batteryAh = Number(sp.ba);
   const priceMin = Number(sp.pmin);
   const priceMax = Number(sp.pmax);
+  const totalRunningWatts = Number(sp.w);
   const hours = Number(sp.h);
 
   const hasValidData = [inverterKw, systemVoltage, batteryQty, batteryAh, priceMin, priceMax, hours]
@@ -166,21 +168,35 @@ export default async function ResultPage({
     <main className="min-h-screen bg-background">
       <ResultHeader locale={locale} />
 
-      <section className="max-w-2xl mx-auto px-6 py-12 md:py-16 space-y-10">
+      <section className="max-w-6xl mx-auto px-4 md:px-6 py-10 md:py-14 space-y-8 md:space-y-10">
         <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight">{t("title")}</h1>
-        <ResultCard
-          inverterKw={inverterKw}
-          systemVoltage={systemVoltage}
-          batteryQty={batteryQty}
-          batteryAh={batteryAh}
-          priceMin={priceMin}
-          priceMax={priceMax}
-          hours={hours}
-          locale={locale}
-        />
+
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 md:gap-6 items-start">
+          <div className="lg:col-span-3">
+            <ResultCard
+              inverterKw={inverterKw}
+              systemVoltage={systemVoltage}
+              batteryQty={batteryQty}
+              batteryAh={batteryAh}
+              priceMin={priceMin}
+              priceMax={priceMax}
+              hours={hours}
+              locale={locale}
+            />
+          </div>
+          <div className="lg:col-span-2">
+            <CostComparisonCard
+              watts={Number.isFinite(totalRunningWatts) && totalRunningWatts > 0 ? totalRunningWatts : inverterKw * 1000}
+              hours={hours}
+              priceMin={priceMin}
+              priceMax={priceMax}
+              locale={locale}
+            />
+          </div>
+        </div>
 
         <div>
-          <h2 className="text-xl font-bold mb-4">{t("shops_title")}</h2>
+          <h2 className="text-xl md:text-2xl font-bold mb-4 md:mb-5">{t("shops_title")}</h2>
           <ShopsList locale={locale} />
         </div>
       </section>
